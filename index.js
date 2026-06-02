@@ -22,8 +22,9 @@ app.get("/api/seed-users", async (req, res) => {
         let count = await userModel.countDocuments();
         if (count === 0) {
             await userModel.insertMany([
-                { username: "admin", password: "admin123", role: "manager" },
-                { username: "staff", password: "staff123", role: "staff" }
+                // 🔥 Set default seeded users to already be approved
+                { username: "admin", password: "admin123", role: "manager", isApproved: true },
+                { username: "staff", password: "staff123", role: "staff", isApproved: true }
             ]);
             res.send("<h1>✅ Success! Default accounts created.</h1>");
         } else {
@@ -34,7 +35,7 @@ app.get("/api/seed-users", async (req, res) => {
     }
 });
 
-// 2. Register New User (Matches your login.html popup)
+// 2. Register New User
 app.post("/api/register", async (req, res) => {
     try {
         const { username, password, role } = req.body;
@@ -44,10 +45,11 @@ app.post("/api/register", async (req, res) => {
             return res.status(400).json({ status: 0, message: "User already registered! Kindly login." });
         }
 
-        const newUser = new userModel({ username, password, role });
+        // 🔥 Set new users to isApproved: false by default
+        const newUser = new userModel({ username, password, role, isApproved: false });
         await newUser.save();
 
-        res.json({ status: 1, message: "Registered Successfully! Please login." });
+        res.json({ status: 1, message: "Registered Successfully! Please wait for Manager approval." });
     } catch (err) {
         console.error("Register Error:", err);
         res.status(500).json({ status: 0, message: "Error registering user" });
@@ -62,6 +64,11 @@ app.post("/api/login", async (req, res) => {
         let user = await userModel.findOne({ username: username, password: password });
 
         if (user) {
+            // 🔥 THE GATEKEEPER: Check if they are approved!
+            if (user.isApproved === false) {
+                return res.json({ status: 0, message: "Account is pending. Please wait for a Manager to approve your account." });
+            }
+
             // Returning status, role, and username for frontend session storage
             res.json({ 
                 status: 1, 
@@ -75,6 +82,26 @@ app.post("/api/login", async (req, res) => {
     } catch (err) {
         console.error("Login Error:", err);
         res.status(500).json({ status: 0, message: "Internal server error" });
+    }
+});
+
+// 4. Get Pending Users for Manager Dashboard
+app.get('/api/admins/pending', async (req, res) => {
+    try {
+        let pendingUsers = await userModel.find({ isApproved: false }, 'username role _id');
+        res.status(200).json(pendingUsers);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to fetch pending users" });
+    }
+});
+
+// 5. Approve a User
+app.put('/api/admins/approve/:id', async (req, res) => {
+    try {
+        await userModel.findByIdAndUpdate(req.params.id, { isApproved: true });
+        res.status(200).json({ status: 1, message: "User approved successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to approve user" });
     }
 });
 
@@ -127,9 +154,6 @@ app.put('/api/item-update/:id', async (req, res) => {
     }
 });
 
-// ==========================================
-// ORDER APIS
-// ==========================================
 // ==========================================
 // ORDER APIS (Updated for Delivery & Pickup)
 // ==========================================
