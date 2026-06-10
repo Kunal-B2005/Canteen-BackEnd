@@ -105,6 +105,21 @@ app.put('/api/admins/approve/:id', async (req, res) => {
     }
 });
 
+// 6. REJECT & DELETE a User (🔥 NEWLY ADDED)
+app.delete('/api/admins/reject/:id', async (req, res) => {
+    try {
+        const deletedUser = await userModel.findByIdAndDelete(req.params.id);
+        
+        if (!deletedUser) {
+            return res.status(404).json({ status: 0, message: "User not found" });
+        }
+        res.status(200).json({ status: 1, message: "Registration request rejected and deleted" });
+    } catch (error) {
+        console.error("Error rejecting user:", error);
+        res.status(500).json({ status: 0, error: "Failed to reject user" });
+    }
+});
+
 // ==========================================
 // ITEM APIS
 // ==========================================
